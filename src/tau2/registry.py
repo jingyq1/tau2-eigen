@@ -347,6 +347,11 @@ try:
     registry.register_domain(knowledge_domain_get_environment, "banking_knowledge")
     registry.register_tasks(knowledge_domain_get_tasks, "banking_knowledge")
 
+    # Auto-discover and register eigen domains from domain_config.json files
+    from tau2.eigen.domain_factory import discover_and_register_eigen_domains
+
+    discover_and_register_eigen_domains(registry)
+
     logger.debug(
         f"Default components registered successfully. Registry info: {json.dumps(registry.get_info().model_dump(), indent=2)}"
     )
