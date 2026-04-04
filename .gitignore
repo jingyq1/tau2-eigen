@@ -1,5 +1,5 @@
 data/simulations/
-data/tau2/domains/*
+data/tau2/domains/eigendata*
 *.tmp
 .DS_Store
 profile.json

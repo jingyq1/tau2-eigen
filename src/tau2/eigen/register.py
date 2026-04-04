@@ -4,8 +4,7 @@ Usage:
     python -m tau2.eigen.register \
         --source "Archive 2/tau2-airline" \
         --base-domain airline \
-        --name airline_eigen \
-        --db mcp_deploy/airline_mcp/data/db_updated.json
+        --name airline_eigen
 """
 
 import argparse
@@ -19,19 +18,8 @@ from loguru import logger
 
 from tau2.eigen.config import EigenDomainConfig
 from tau2.eigen.convert import convert_intents_to_tasks
-from tau2.eigen.domain_factory import load_db_for_domain, validate_db_for_domain
+from tau2.eigen.domain_factory import validate_db_for_domain
 from tau2.utils.utils import DATA_DIR
-
-
-# ---------------------------------------------------------------------------
-# Default DB paths per base domain
-# ---------------------------------------------------------------------------
-
-_DEFAULT_DB_PATHS = {
-    "airline": DATA_DIR / "tau2" / "domains" / "airline" / "db.json",
-    "retail": DATA_DIR / "tau2" / "domains" / "retail" / "db.json",
-    "banking_knowledge": DATA_DIR / "tau2" / "domains" / "banking_knowledge" / "db.json",
-}
 
 
 # ---------------------------------------------------------------------------
@@ -74,15 +62,16 @@ def validate_sample_alignment(source_dir: str | Path) -> list[str]:
 
 
 def validate_source_dir(
-    db_path: str | Path, ref_payload_dir: str | Path, base_domain: str
-) -> tuple[str, object, bool]:
-    """Validate ALL reference_payloads and return env_name plus resolved DB.
+    ref_payload_dir: str | Path, base_domain: str
+) -> tuple[str, object]:
+    """Validate ALL reference_payloads and return env_name plus extracted DB.
 
-    Three-phase check:
+    Two-phase check:
     1. Collect all env_names and init DB hashes (enforce single-env per payload).
     2. Internal consistency (all env_names same, all init DB hashes same).
-    3. External consistency (prefer selected --db when its hash matches;
-       otherwise fall back to the payload initial_state DB).
+
+    The database is extracted directly from the reference payloads — no
+    external DB file is needed.
     """
     ref_payload_dir = Path(ref_payload_dir)
     ref_files = sorted(ref_payload_dir.glob("reference_payload_*.json"))
@@ -127,20 +116,7 @@ def validate_source_dir(
             f"A single source directory must use one consistent initial DB."
         )
 
-    # Phase 3: external consistency
-    db = load_db_for_domain(base_domain, str(db_path))
-    db_hash = db.get_hash()
-    init_hash = all_init_hashes[0]
-    if db_hash != init_hash:
-        logger.warning(
-            f"DB mismatch! Selected DB hash ({db_hash[:16]}...) != "
-            f"reference_payload initial_state hash ({init_hash[:16]}...). "
-            "Falling back to the initial_state database embedded in the "
-            "reference payloads for registration."
-        )
-        return all_env_names[0], payload_db, True
-
-    return all_env_names[0], db, False
+    return all_env_names[0], payload_db
 
 
 # ---------------------------------------------------------------------------
@@ -186,10 +162,10 @@ def register(
     source: str,
     base_domain: str,
     name: str,
-    db: str | None = None,
 ) -> EigenDomainConfig:
     """Register a new eigen domain.
 
+    The database is extracted from the reference payloads automatically.
     Returns the saved EigenDomainConfig.
     """
     source_dir = Path(source)
@@ -201,38 +177,21 @@ def register(
     sample_ids = validate_sample_alignment(source_dir)
     logger.info(f"Found {len(sample_ids)} aligned samples: {sample_ids}")
 
-    # Step 2: resolve DB path
-    if db is None:
-        if base_domain not in _DEFAULT_DB_PATHS:
-            raise ValueError(
-                f"No default DB path for base domain '{base_domain}'. "
-                f"Please provide --db explicitly."
-            )
-        db_path = _DEFAULT_DB_PATHS[base_domain]
-        logger.info(f"No --db provided, using base domain default: {db_path}")
-    else:
-        db_path = Path(db)
-        if not db_path.is_file():
-            raise ValueError(f"DB file does not exist: {db_path}")
-
-    # Step 3: full-scan validation (env_name, DB consistency)
+    # Step 2: full-scan validation (env_name, DB consistency + extraction)
     logger.info("Validating source directory (full scan)...")
-    env_name, resolved_db, used_payload_db = validate_source_dir(
-        db_path, source_dir / "reference_payloads", base_domain
+    env_name, resolved_db = validate_source_dir(
+        source_dir / "reference_payloads", base_domain
     )
     logger.info(f"Validated: env_name={env_name}, DB consistent across all payloads")
 
-    # Step 4: create output directory
+    # Step 3: create output directory
     domain_dir = DATA_DIR / "tau2" / "domains" / name
     domain_dir.mkdir(parents=True, exist_ok=True)
 
-    # Step 5: copy DB, reference_payloads, and evaluators
+    # Step 4: copy DB (extracted from payloads), reference_payloads, and evaluators
     dest_db = domain_dir / "db.json"
     resolved_db.dump(str(dest_db))
-    if used_payload_db:
-        logger.info(f"Wrote payload-derived DB to {dest_db}")
-    else:
-        logger.info(f"Copied validated DB to {dest_db}")
+    logger.info(f"Extracted DB from reference payloads → {dest_db}")
 
     for subdir in ("reference_payloads", "evaluators"):
         src = source_dir / subdir
@@ -243,11 +202,11 @@ def register(
             shutil.copytree(str(src), str(dest))
             logger.info(f"Copied {subdir}/ to {dest}")
 
-    # Step 6: extract per-sample prefixes
+    # Step 5: extract per-sample prefixes
     logger.info("Extracting per-sample state_modifying_prefixes...")
     prefixes = extract_per_sample_prefixes(source_dir / "evaluators", sample_ids)
 
-    # Step 7: convert intents → tasks.json
+    # Step 6: convert intents → tasks.json
     tasks_path = domain_dir / "tasks.json"
     logger.info("Converting intents to tasks.json...")
     tasks = convert_intents_to_tasks(
@@ -255,12 +214,12 @@ def register(
     )
     logger.info(f"Wrote {len(tasks)} tasks to {tasks_path}")
 
-    # Step 8: write domain_config.json
+    # Step 7: write domain_config.json
     config = EigenDomainConfig(
         eigen_domain_name=name,
         base_domain=base_domain,
-        db_path=str(dest_db),
-        tasks_path=str(tasks_path),
+        db_path=str(dest_db.relative_to(DATA_DIR)),
+        tasks_path=str(tasks_path.relative_to(DATA_DIR)),
         env_name_in_payload=env_name,
         source_dir=str(source_dir),
         custom_policy_path=None,
@@ -290,11 +249,8 @@ def main():
     parser.add_argument(
         "--name", required=True, help="Name for the new eigen domain (e.g., 'airline_eigen')"
     )
-    parser.add_argument(
-        "--db", default=None, help="Path to custom DB file. If omitted, uses base domain's default."
-    )
     args = parser.parse_args()
-    register(source=args.source, base_domain=args.base_domain, name=args.name, db=args.db)
+    register(source=args.source, base_domain=args.base_domain, name=args.name)
 
 
 if __name__ == "__main__":

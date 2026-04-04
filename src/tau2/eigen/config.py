@@ -29,4 +29,12 @@ class EigenDomainConfig:
     def load(cls, path: str | Path) -> "EigenDomainConfig":
         with open(path) as f:
             data = json.load(f)
-        return cls(**data)
+        config = cls(**data)
+        # Resolve relative paths against DATA_DIR so the repo is portable.
+        from tau2.utils.utils import DATA_DIR
+
+        for attr in ("db_path", "tasks_path"):
+            p = getattr(config, attr)
+            if p and not Path(p).is_absolute():
+                setattr(config, attr, str(DATA_DIR / p))
+        return config

@@ -16,9 +16,10 @@ Convert EigenData source data into a tau2-bench domain:
 python -m tau2.eigen.register \
     --source <path-to-eigendata-source> \
     --base-domain <base-domain-name> \
-    --name <domain-name> \
-    --db <path-to-db-json>
+    --name <domain-name>
 ```
+
+The database is automatically extracted from the `initial_state.database` in the reference payloads (validated for consistency across all samples).
 
 **Example:**
 
@@ -26,8 +27,7 @@ python -m tau2.eigen.register \
 python -m tau2.eigen.register \
     --source "eigendataDB/tau2-airline" \
     --base-domain airline \
-    --name eigendata-airline \
-    --db eigendataDB//data-airline/db.json
+    --name eigendata-airline
 ```
 
 ### 2. Run simulation
