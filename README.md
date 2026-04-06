@@ -77,3 +77,50 @@ python -m tau2.eigen.postprocess \
     --name eigendata-airline \
     -o tau2-bench/data/simulations/xxxxxxxx_xxxxxx_eigendata-airline_.../results_scored.json
 ```
+
+### 5. Batch evaluation
+
+Run simulation + postprocess for multiple (model, domain) pairs from a single YAML config:
+
+```bash
+tau2 eval config.yaml
+```
+
+**Config file format:**
+
+```yaml
+defaults:
+  user_llm: claude-opus-4-6
+  num_trials: 1
+  eval_llm: gpt-4.1
+  max_concurrency: 5
+
+max_workers: 4  # parallel eval processes
+
+evals:
+  - domain: eigendata-airline
+    agent_llm: openai/gpt-5.3-codex
+  - domain: eigendata-airline
+    agent_llm: anthropic/claude-sonnet-4-6
+  - domain: eigendata-retail
+    agent_llm: openai/gpt-5.3-codex
+    num_tasks: 10  # per-entry override
+```
+
+**Options:**
+
+```bash
+# Run only the simulation step (skip postprocess)
+tau2 eval config.yaml --only run
+
+# Run only the postprocess step (skip simulation)
+tau2 eval config.yaml --only postprocess
+
+# Run a single entry by index (0-indexed)
+tau2 eval config.yaml --entry 0
+
+# Override max parallel workers
+tau2 eval config.yaml --max-workers 2
+```
+
+After completion, a summary table is printed with per-domain metrics (Config Match, Key Func., LLM Judge, etc.).
