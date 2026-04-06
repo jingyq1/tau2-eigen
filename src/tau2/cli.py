@@ -520,6 +520,9 @@ def run_intro():
     cmd_table.add_row(
         "tau2 evaluate-trajs <paths>", "Re-evaluate trajectories and recompute rewards"
     )
+    cmd_table.add_row(
+        "tau2 eval <config.yaml>", "Batch eval: simulate + postprocess from config"
+    )
     cmd_table.add_row("tau2 submit prepare", "Prepare a leaderboard submission")
     cmd_table.add_row("tau2 submit validate", "Validate a submission directory")
     cmd_table.add_row("tau2 check-data", "Verify data directory is set up correctly")
@@ -745,6 +748,37 @@ def main():
         help="Directory to save updated trajectory files with recomputed rewards. If not provided, only displays metrics.",
     )
     evaluate_parser.set_defaults(func=lambda args: run_evaluate_trajectories(args))
+
+    # Batch eval command
+    eval_parser = subparsers.add_parser(
+        "eval",
+        help="Run batch evaluation: simulate + postprocess for (model, domain) pairs from a config file",
+    )
+    eval_parser.add_argument(
+        "config",
+        type=str,
+        help="Path to a YAML config file with eval entries",
+    )
+    eval_parser.add_argument(
+        "--only",
+        type=str,
+        choices=["run", "postprocess"],
+        default=None,
+        help="Only run one step: 'run' (simulation only) or 'postprocess' (evaluation only)",
+    )
+    eval_parser.add_argument(
+        "--entry",
+        type=int,
+        default=None,
+        help="Run only the Nth entry from the config (0-indexed)",
+    )
+    eval_parser.add_argument(
+        "--max-workers",
+        type=int,
+        default=None,
+        help="Max concurrent eval processes (default: from config or 4)",
+    )
+    eval_parser.set_defaults(func=lambda args: run_batch_eval(args))
 
     # Review command - LLM-based conversation review
     review_parser = subparsers.add_parser(
@@ -979,6 +1013,17 @@ def run_evaluate_trajectories(args):
     logger.configure(handlers=[{"sink": sys.stderr, "level": "ERROR"}])
 
     evaluate_trajectories(args.paths, args.output_dir)
+
+
+def run_batch_eval(args):
+    from tau2.eigen.batch_eval import run_batch_eval
+
+    run_batch_eval(
+        config_path=args.config,
+        only=args.only,
+        entry_index=args.entry,
+        max_workers=args.max_workers,
+    )
 
 
 def run_review(args):
