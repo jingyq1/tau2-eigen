@@ -31,7 +31,7 @@ from tau2.utils.utils import DATA_DIR
 # ---------------------------------------------------------------------------
 
 EVAL_DEFAULTS = {
-    "user_llm": "openai/gpt-5.2",
+    "user_llm": "claude-opus-4-6",
     "num_trials": 1,
     "num_tasks": None,
     "eval_llm": "gpt-4.1",

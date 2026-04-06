@@ -1,4 +1,4 @@
-data/simulations/
+data/simulations*/
 data/tau2/domains/eigendata*
 *.tmp
 .DS_Store
