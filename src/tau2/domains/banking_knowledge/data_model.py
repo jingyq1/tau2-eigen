@@ -137,6 +137,8 @@ class TransactionalDB(DB):
     payment_history: DatabaseTable = Field(default_factory=DatabaseTable)
     # Debit card disputes: formal disputes filed for debit card transactions (Regulation E)
     debit_card_disputes: DatabaseTable = Field(default_factory=DatabaseTable)
+    # Interest discrepancy reports: formal reports for interest calculation issues
+    interest_discrepancy_reports: DatabaseTable = Field(default_factory=DatabaseTable)
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get statistics about the database."""

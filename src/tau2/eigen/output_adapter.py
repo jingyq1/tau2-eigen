@@ -129,8 +129,8 @@ def build_eval_payload(
     return {
         "environment_snapshots": {
             config.env_name_in_payload: {
-                "initial_state": {"database": initial_db, "state": {"loaded": True}},
-                "final_state": {"database": final_db, "state": {"loaded": True}},
+                "initial_state": {"database": initial_db, "state": {"database_loaded": True, "scenario": None}},
+                "final_state": {"database": final_db, "state": {"database_loaded": True, "scenario": None}},
             }
         },
         "trajectory": trajectory,

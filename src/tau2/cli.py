@@ -778,6 +778,12 @@ def main():
         default=None,
         help="Max concurrent eval processes (default: from config or 4)",
     )
+    eval_parser.add_argument(
+        "--timeout",
+        type=float,
+        default=None,
+        help="Maximum wallclock time in seconds for each simulation. Overrides config value. No timeout by default.",
+    )
     eval_parser.set_defaults(func=lambda args: run_batch_eval(args))
 
     # Review command - LLM-based conversation review
@@ -1023,6 +1029,7 @@ def run_batch_eval(args):
         only=args.only,
         entry_index=args.entry,
         max_workers=args.max_workers,
+        timeout=getattr(args, "timeout", None),
     )
 
 

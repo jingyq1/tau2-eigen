@@ -45,6 +45,7 @@ EVAL_DEFAULTS = {
     "task_ids": None,
     "task_split_name": "base",
     "save_to": None,
+    "timeout": 600,
 }
 
 
@@ -68,6 +69,7 @@ class EvalEntry:
     task_ids: list[str] | None = None
     task_split_name: str = "base"
     save_to: str | None = None
+    timeout: float | None = None
 
 
 @dataclass
@@ -127,6 +129,7 @@ def _build_run_config(entry: EvalEntry):
         num_tasks=entry.num_tasks,
         max_steps=entry.max_steps,
         max_errors=10,
+        timeout=entry.timeout,
         max_concurrency=entry.max_concurrency,
         seed=entry.seed,
         log_level="ERROR",
@@ -163,7 +166,7 @@ def run_single_eval(entry: EvalEntry, only: str | None = None) -> EvalResult:
             run_domain(config)
 
             # Find the results dir (latest matching this domain + agent)
-            results_dir = _find_latest_results_dir(entry.domain, entry.agent_llm)
+            results_dir = _find_latest_results_dir(entry.domain, entry.agent_llm, entry.agent)
             if results_dir is None:
                 return EvalResult(
                     domain=entry.domain,
@@ -175,7 +178,7 @@ def run_single_eval(entry: EvalEntry, only: str | None = None) -> EvalResult:
         # Step 2: Postprocess
         if only != "run":
             if results_dir is None:
-                results_dir = _find_latest_results_dir(entry.domain, entry.agent_llm)
+                results_dir = _find_latest_results_dir(entry.domain, entry.agent_llm, entry.agent)
             if results_dir is None:
                 return EvalResult(
                     domain=entry.domain,
@@ -226,7 +229,7 @@ def run_single_eval(entry: EvalEntry, only: str | None = None) -> EvalResult:
         )
 
 
-def _find_latest_results_dir(domain: str, agent_llm: str) -> Path | None:
+def _find_latest_results_dir(domain: str, agent_llm: str, agent: str = "llm_agent") -> Path | None:
     """Find the latest simulation directory matching a domain and agent model."""
     sim_root = DATA_DIR / "simulations"
     if not sim_root.exists():
@@ -235,9 +238,13 @@ def _find_latest_results_dir(domain: str, agent_llm: str) -> Path | None:
     # Extract clean model name (e.g., "openai/gpt-5.3-codex" -> "gpt-5.3-codex")
     clean_model = [x for x in agent_llm.split("/") if x][-1]
 
+    # Match the agent-specific segment (e.g. "_llm_agent_gpt-5.3-codex_") to avoid
+    # false positives when the same model name appears in the user_simulator suffix.
+    agent_segment = f"_{agent}_{clean_model}_"
+
     candidates = []
     for d in sim_root.iterdir():
-        if d.is_dir() and domain in d.name and clean_model in d.name:
+        if d.is_dir() and domain in d.name and agent_segment in d.name:
             results_file = d / "results.json"
             if results_file.exists():
                 candidates.append(d)
@@ -266,6 +273,7 @@ def run_batch_eval(
     only: str | None = None,
     entry_index: int | None = None,
     max_workers: int | None = None,
+    timeout: float | None = None,
 ) -> list[EvalResult]:
     """Run batch evaluation from a config file.
 
@@ -274,6 +282,7 @@ def run_batch_eval(
         only: If "run" or "postprocess", only run that step.
         entry_index: If set, only run the Nth entry from the config.
         max_workers: Override max_workers from config.
+        timeout: Override per-simulation wallclock timeout (seconds) for all entries.
 
     Returns:
         List of EvalResult objects.
@@ -281,6 +290,10 @@ def run_batch_eval(
     config = load_config(config_path)
     entries = config.entries
     workers = max_workers or config.max_workers
+
+    if timeout is not None:
+        for entry in entries:
+            entry.timeout = timeout
 
     if entry_index is not None:
         if entry_index < 0 or entry_index >= len(entries):
