@@ -32,17 +32,16 @@ from tau2.utils.utils import DATA_DIR
 # ---------------------------------------------------------------------------
 
 
-class OpenAILLMClient:
-    """Thin wrapper providing ``.generate(prompt) -> str`` interface."""
+class LLMClient:
+    """Thin wrapper providing ``.generate(prompt) -> str`` interface via LiteLLM."""
 
     def __init__(self, model: str = "gpt-4.1"):
-        from openai import OpenAI
-
-        self.client = OpenAI()
         self.model = model
 
     def generate(self, prompt: str) -> str:
-        response = self.client.chat.completions.create(
+        from litellm import completion
+
+        response = completion(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,
@@ -182,7 +181,7 @@ def postprocess(
     initial_db = load_db_for_domain(config.base_domain, config.db_path).model_dump()
 
     # Initialize LLM client
-    llm_client = OpenAILLMClient(model=llm_model)
+    llm_client = LLMClient(model=llm_model)
 
     # Process each simulation
     domain_dir = config_path.parent
