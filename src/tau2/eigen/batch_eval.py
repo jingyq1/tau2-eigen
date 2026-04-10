@@ -453,7 +453,7 @@ def print_summary(results: list[EvalResult]) -> None:
     for domain in sorted(tables_by_domain):
         rows = sorted(
             tables_by_domain[domain],
-            key=lambda row: (-float(row["Config Match"]), row["Model"]),
+            key=lambda row: (-float(row["DB Check"]), row["Model"]),
         )
         print(f"\nDomain: {domain}")
         print(_render_table(rows))
