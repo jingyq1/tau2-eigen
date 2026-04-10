@@ -85,11 +85,28 @@ def _load_sample_evaluator(
 # ---------------------------------------------------------------------------
 
 
+def _extract_check_results(eval_result: dict) -> tuple[bool, bool, bool]:
+    """Extract (db_passed, action_passed, llm_passed) from either evaluator format.
+
+    Supports both the new LLM-based evaluator (db_check/rubrics_check/policy_check)
+    and the old rule-based evaluator (config_match/function_call_match/llm_judgment).
+    """
+    if "db_check" in eval_result:
+        return (
+            eval_result.get("db_check", {}).get("passed", False),
+            eval_result.get("rubrics_check", {}).get("passed", False),
+            eval_result.get("policy_check", {}).get("passed", False),
+        )
+    return (
+        eval_result.get("config_match", False),
+        eval_result.get("function_call_match", False),
+        eval_result.get("llm_judgment", {}).get("passed", False),
+    )
+
+
 def eval_result_to_reward_info(eval_result: dict) -> RewardInfo:
     """Map our evaluator output to tau2 RewardInfo."""
-    config_match = eval_result.get("config_match", False)
-    function_match = eval_result.get("function_call_match", False)
-    llm_passed = eval_result.get("llm_judgment", {}).get("passed", False)
+    config_match, function_match, llm_passed = _extract_check_results(eval_result)
     overall_pass = eval_result.get("overall_pass", False)
 
     return RewardInfo(
@@ -115,13 +132,14 @@ def _build_sample_status_rows(results: Results) -> list[dict]:
         eigen = (sim.reward_info.info or {}).get("eigen_eval", {})
         if not eigen:
             continue
+        db_passed, func_passed, llm_passed = _extract_check_results(eigen)
         rows.append(
             {
                 "sample": sim.task_id,
                 "status": "PASS" if eigen.get("overall_pass", False) else "FAIL",
-                "config": bool(eigen.get("config_match", False)),
-                "func": bool(eigen.get("function_call_match", False)),
-                "llm": bool((eigen.get("llm_judgment") or {}).get("passed", False)),
+                "config": bool(db_passed),
+                "func": bool(func_passed),
+                "llm": bool(llm_passed),
             }
         )
     return rows
@@ -231,12 +249,11 @@ def postprocess(
         sim.reward_info = eval_result_to_reward_info(eval_result)
         scored += 1
 
-        status = "PASS" if eval_result["overall_pass"] else "FAIL"
+        db_ok, func_ok, llm_ok = _extract_check_results(eval_result)
+        status = "PASS" if eval_result.get("overall_pass", False) else "FAIL"
         logger.info(
             f"  {sim.task_id}: {status}  "
-            f"config={eval_result['config_match']}  "
-            f"func={eval_result['function_call_match']}  "
-            f"llm={eval_result.get('llm_judgment', {}).get('passed', False)}"
+            f"config={db_ok}  func={func_ok}  llm={llm_ok}"
         )
 
     logger.info(f"Scored {scored} simulations, skipped {skipped}")
@@ -253,9 +270,10 @@ def postprocess(
         eigen = (sim.reward_info.info or {}).get("eigen_eval", {})
         if not eigen:
             continue
-        if eigen.get("function_call_match"):
+        _, f_ok, l_ok = _extract_check_results(eigen)
+        if f_ok:
             func_pass += 1
-        if eigen.get("llm_judgment", {}).get("passed"):
+        if l_ok:
             llm_pass += 1
     logger.info(
         f"Metrics: avg_reward={metrics.avg_reward:.3f}, "
