@@ -1,3 +1,4 @@
+import contextlib
 import json
 import logging
 import os
@@ -16,6 +17,29 @@ from litellm import completion, completion_cost
 from litellm.caching.caching import Cache
 from litellm.main import ModelResponse, Usage
 from loguru import logger
+
+
+@contextlib.contextmanager
+def _lenient_json():
+    """Temporarily patch json.loads to accept control characters (strict=False).
+
+    Some LLM providers (e.g. OpenRouter/Grok) return JSON with raw control
+    characters inside string values.  Python's json.loads rejects them in
+    strict mode (the default).  litellm parses the HTTP response internally
+    using json.loads, so we monkey-patch it for the duration of the LLM call.
+    """
+    _orig = json.loads
+
+    def _loads_lenient(*args, **kwargs):
+        kwargs.setdefault("strict", False)
+        return _orig(*args, **kwargs)
+
+    json.loads = _loads_lenient
+    try:
+        yield
+    finally:
+        json.loads = _orig
+
 
 from tau2.config import (
     DEFAULT_LLM_CACHE_TYPE,
@@ -406,13 +430,14 @@ def generate(
 
     start_time = time.perf_counter()
     try:
-        response = completion(
-            model=model,
-            messages=litellm_messages,
-            tools=tools_schema,
-            tool_choice=tool_choice,
-            **kwargs,
-        )
+        with _lenient_json():
+            response = completion(
+                model=model,
+                messages=litellm_messages,
+                tools=tools_schema,
+                tool_choice=tool_choice,
+                **kwargs,
+            )
     except Exception as e:
         logger.error(e)
         raise e
@@ -437,7 +462,7 @@ def generate(
         ToolCall(
             id=tool_call.id,
             name=tool_call.function.name,
-            arguments=json.loads(tool_call.function.arguments),
+            arguments=json.loads(tool_call.function.arguments, strict=False),
         )
         for tool_call in raw_tool_calls
     ]

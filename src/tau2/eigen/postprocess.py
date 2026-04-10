@@ -40,12 +40,14 @@ class LLMClient:
 
     def generate(self, prompt: str) -> str:
         from litellm import completion
+        from tau2.utils.llm_utils import _lenient_json
 
-        response = completion(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-        )
+        with _lenient_json():
+            response = completion(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
+            )
         return response.choices[0].message.content or ""
 
 

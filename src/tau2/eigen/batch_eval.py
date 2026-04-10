@@ -37,7 +37,7 @@ EVAL_DEFAULTS = {
     "eval_llm": "gpt-4.1",
     "agent": "llm_agent",
     "user": "user_simulator",
-    "max_steps": 200,
+    "max_steps": 100,
     "max_concurrency": 5,
     "seed": 300,
     "max_retries": 3,
