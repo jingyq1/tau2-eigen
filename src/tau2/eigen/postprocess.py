@@ -132,14 +132,14 @@ def _build_sample_status_rows(results: Results) -> list[dict]:
         eigen = (sim.reward_info.info or {}).get("eigen_eval", {})
         if not eigen:
             continue
-        db_passed, func_passed, llm_passed = _extract_check_results(eigen)
+        db_passed, rubrics_passed, policy_passed = _extract_check_results(eigen)
         rows.append(
             {
                 "sample": sim.task_id,
                 "status": "PASS" if eigen.get("overall_pass", False) else "FAIL",
-                "config": bool(db_passed),
-                "func": bool(func_passed),
-                "llm": bool(llm_passed),
+                "db_check": bool(db_passed),
+                "rubrics": bool(rubrics_passed),
+                "policy": bool(policy_passed),
             }
         )
     return rows
@@ -148,12 +148,12 @@ def _build_sample_status_rows(results: Results) -> list[dict]:
 def _build_sample_status_markdown(rows: list[dict]) -> str:
     """Render per-sample evaluation status as a markdown table."""
     lines = [
-        "| sample | status | config | func | llm |",
+        "| sample | status | db_check | rubrics | policy |",
         "| --- | --- | --- | --- | --- |",
     ]
     for row in rows:
         lines.append(
-            f"| {row['sample']} | {row['status']} | {row['config']} | {row['func']} | {row['llm']} |"
+            f"| {row['sample']} | {row['status']} | {row['db_check']} | {row['rubrics']} | {row['policy']} |"
         )
     return "\n".join(lines)
 
@@ -249,11 +249,11 @@ def postprocess(
         sim.reward_info = eval_result_to_reward_info(eval_result)
         scored += 1
 
-        db_ok, func_ok, llm_ok = _extract_check_results(eval_result)
+        db_ok, rubrics_ok, policy_ok = _extract_check_results(eval_result)
         status = "PASS" if eval_result.get("overall_pass", False) else "FAIL"
         logger.info(
             f"  {sim.task_id}: {status}  "
-            f"config={db_ok}  func={func_ok}  llm={llm_ok}"
+            f"db_check={db_ok}  rubrics={rubrics_ok}  policy={policy_ok}"
         )
 
     logger.info(f"Scored {scored} simulations, skipped {skipped}")
@@ -265,22 +265,22 @@ def postprocess(
 
     # Print metrics
     metrics = compute_metrics(results)
-    func_pass = llm_pass = 0
+    rubrics_pass = policy_pass = 0
     for sim in results.simulations:
         eigen = (sim.reward_info.info or {}).get("eigen_eval", {})
         if not eigen:
             continue
-        _, f_ok, l_ok = _extract_check_results(eigen)
-        if f_ok:
-            func_pass += 1
-        if l_ok:
-            llm_pass += 1
+        _, r_ok, p_ok = _extract_check_results(eigen)
+        if r_ok:
+            rubrics_pass += 1
+        if p_ok:
+            policy_pass += 1
     logger.info(
         f"Metrics: avg_reward={metrics.avg_reward:.3f}, "
         f"pass^1={metrics.pass_hat_ks.get(1, 0):.3f}, "
-        f"db_match={metrics.db_match_count}/{scored}, "
-        f"func_match={func_pass}/{scored}, "
-        f"llm_judge={llm_pass}/{scored}"
+        f"db_check={metrics.db_match_count}/{scored}, "
+        f"rubrics={rubrics_pass}/{scored}, "
+        f"policy={policy_pass}/{scored}"
     )
 
     # Save metrics summary
@@ -295,8 +295,8 @@ def postprocess(
         "total": scored,
         "skipped": skipped,
         "db_match": metrics.db_match_count,
-        "func_match": func_pass,
-        "llm_judge": llm_pass,
+        "rubrics_match": rubrics_pass,
+        "policy_match": policy_pass,
         "overall_pass": overall_pass,
         "sample_results": sample_rows,
         "sample_results_markdown": _build_sample_status_markdown(sample_rows),

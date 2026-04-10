@@ -45,7 +45,7 @@ EVAL_DEFAULTS = {
     "task_ids": None,
     "task_split_name": "base",
     "save_to": None,
-    "timeout": 600,
+    "timeout": 300,
 }
 
 
@@ -342,10 +342,10 @@ def run_batch_eval(
 
 HEADERS = [
     "Model",
-    "Config Match",
-    "Key Func.",
-    "LLM Judge",
-    "Config + Func",
+    "DB Check",
+    "Rubrics",
+    "Policy",
+    "DB + Rubrics",
     "All Three",
 ]
 
@@ -390,18 +390,18 @@ def _metrics_to_row(agent_llm: str, metrics: dict) -> dict[str, str]:
     """Convert a metrics dict to a table row."""
     total = int(metrics.get("total", 0))
     sample_results = metrics.get("sample_results") or []
-    config_and_func = sum(
+    db_and_rubrics = sum(
         1
         for sample in sample_results
-        if sample.get("config") and sample.get("func")
+        if sample.get("db_check") and sample.get("rubrics")
     )
 
     return {
         "Model": _normalize_model_name(agent_llm),
-        "Config Match": _format_percentage(_as_percentage(metrics.get("db_match", 0), total)),
-        "Key Func.": _format_percentage(_as_percentage(metrics.get("func_match", 0), total)),
-        "LLM Judge": _format_percentage(_as_percentage(metrics.get("llm_judge", 0), total)),
-        "Config + Func": _format_percentage(_as_percentage(config_and_func, total)),
+        "DB Check": _format_percentage(_as_percentage(metrics.get("db_match", 0), total)),
+        "Rubrics": _format_percentage(_as_percentage(metrics.get("rubrics_match", 0), total)),
+        "Policy": _format_percentage(_as_percentage(metrics.get("policy_match", 0), total)),
+        "DB + Rubrics": _format_percentage(_as_percentage(db_and_rubrics, total)),
         "All Three": _format_percentage(_as_percentage(metrics.get("overall_pass", 0), total)),
     }
 
